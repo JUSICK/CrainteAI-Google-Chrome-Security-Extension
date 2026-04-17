@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CrainteAI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header>
+        <div class="logo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            CrainteAI
+        </div>
+        <button id="settings-btn" title="API Settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+            </svg>
+        </button>
+    </header>
+
+    <div class="tabs-container">
+        <div class="tabs">
+            <button class="tab active" id="tab-scan">Scanner</button>
+            <button class="tab" id="tab-whitelist">Whitelist</button>
+        </div>
+    </div>
+
+    <main id="view-scan">
+        <div class="url-card">
+            <span class="url-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path
+                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                    </path>
+                </svg></span>
+            <span id="current-url" class="truncate"><b>Searching...</b></span>
+        </div>
+
+        <div class="status-container">
+            <div class="status-circle-wrapper" id="status-circle">
+                <div class="status-icon-glow"></div>
+                <div class="status-icon" id="main-icon">
+                    <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" id="icon-svg">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="status-text-wrap">
+                <span id="status-lock"></span>
+                <span id="status-title" class="text-neutral">Ready to scan</span>
+            </div>
+
+            <p id="ai-reason">Click "Scan Website" to verify the security of this domain.</p>
+        </div>
+
+        <div class="action-container">
+            <button id="scan_btn" class="btn-primary">Scan Website</button>
+
+            <button id="details-toggle" class="btn-text hidden">View Details</button>
+
+            <div id="details-panel" class="hidden">
+                <div class="detail-item-gauge">
+                    <div class="gauge-header">
+                        <span>AI Score</span>
+                        <span id="ai-score-text">No data</span>
+                    </div>
+
+                    <div class="risk-gauge">
+                        <div class="gauge-arrow" id="gauge-arrow">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 21l-12-18h24z" />
+                            </svg>
+                        </div>
+                        <div class="gauge-bar">
+                            <div class="gauge-segment safe"></div>
+                            <div class="gauge-segment warning"></div>
+                            <div class="gauge-segment dangerous"></div>
+                        </div>
+                        <div class="gauge-labels">
+                            <span>Low</span>
+                            <span>Med</span>
+                            <span>High</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-item">
+                    <span>VirusTotal</span>
+                    <span id="vt-score">No data</span>
+                </div>
+                <div class="detail-item">
+                    <span>Domain Age</span>
+                    <span id="whois-score">> 5 yrs</span>
+                </div>
+                <div class="detail-item">
+                    <span>SSL</span>
+                    <span id="ssl-score">No</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <main id="view-whitelist" class="hidden">
+        <div class="whitelist-header">
+            <h3>Trusted Sites</h3>
+            <p>These domains bypass the scanner.</p>
+        </div>
+
+        <div class="whitelist-add">
+            <input type="text" id="whitelist-input" placeholder="e.g. google.com">
+            <button id="whitelist-add-btn" class="btn-secondary">Add</button>
+        </div>
+
+        <ul id="whitelist-items" class="whitelist-list">
+        </ul>
+    </main>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
