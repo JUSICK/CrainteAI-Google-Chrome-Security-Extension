@@ -13,6 +13,10 @@
     "storage",
     "scripting"
   ],
+  "host_permissions": [
+  "https://www.virustotal.com/*",
+  "https://api.groq.com/*"
+  ],
   "icons": {
   "128": "image.png"
 }

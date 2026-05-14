@@ -67,10 +67,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    async function scanUrlWithVirusTotal(urlToScan) {
+        const options = {
+            method: 'GET',
+            headers: {
+                accept: 'application/json',
+                'x-apikey': keys.vtKey
+            },
+            body: new URLSearchParams({ url: urlToScan })
+        };
+
+        try {
+            const response = await fetch('https://www.virustotal.com/api/v3/urls', options);
+            if (!response.ok) {
+                setUIState('warning', 'Error', 'Error VirusTotal API');
+            }
+            const data = await response.json();
+
+        } catch (err) {
+            setUIState('warning', 'Error', 'Error VirusTotal API');
+            console.log(err);
+        }
+        return data;
+    }
 
     scanBtn.addEventListener('click', async () => {
         if (applyWhitelistStateIfWhitelisted()) return;
 
+        // 1. Grab keys from local storage
         const keys = await chrome.storage.local.get(['groqKey', 'vtKey']);
 
         if (!keys.groqKey || !keys.vtKey) {
@@ -78,9 +102,17 @@ document.addEventListener('DOMContentLoaded', () => {
             scanBtn.classList.remove('hidden');
             return;
         }
+
         scanBtn.disabled = true;
         scanBtn.textContent = "ANALYZING...";
-        setUIState('loading', 'Scanning...', 'Waiting for response from the server and Gemini AI model...');
+        setUIState('loading', 'Scanning...', 'Waiting for response from APIs...');
+
+        const scanFx = document.getElementById('scan-fx');
+        if (scanFx) {
+            scanFx.classList.remove('active');
+            void scanFx.offsetWidth; // trigger reflow
+            scanFx.classList.add('active');
+        }
 
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -93,35 +125,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 sslWarningMsg = "NO SSL DETECTED: Connection is unencrypted. ";
             }
 
-            const cleanUrl = tab.url.split('?')[0].split('#')[0];
-            const cacheKey = `scan_${cleanUrl}`
-
-            const cacheRecord = await chrome.storage.local.get(cacheKey);
-
             if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) {
                 setUIState('warning', 'Restricted Page', 'Cannot scan internal browser pages.');
                 return;
             }
 
+            const cleanUrl = tab.url.split('?')[0].split('#')[0];
+            const cacheKey = `scan_${cleanUrl}`;
+            const cacheRecord = await chrome.storage.local.get(cacheKey);
 
-
+            // 2. CHECK CACHE
             if (cacheRecord[cacheKey]) {
                 const savedData = cacheRecord[cacheKey];
                 const ageInMs = Date.now() - savedData.timestamp;
-                const twentyFourHoursInMs = 24 * 60 * 60 * 1000;
-
-                if (ageInMs < twentyFourHoursInMs) {
-                    console.log("CACHE HIT: Loaded from local storage. API saved.");
-
+                
+                if (ageInMs < (24 * 60 * 60 * 1000)) {
+                    console.log("CACHE HIT: Loaded from local storage.");
                     if (!savedData.result.summary.startsWith("[Cached]")) {
                         savedData.result.summary = "[Cached]\n\n" + savedData.result.summary;
                     }
                     if (savedData.result.ssl_secure === undefined) {
                         savedData.result.ssl_secure = (isSecure || isLocalHost);
                     }
-
                     updateUIWithScanData(savedData.result);
-
                     return;
                 } else {
                     console.log("CACHE EXPIRED: Fetching fresh data.");
@@ -129,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // 3. SCRAPE PAGE
             console.log("CACHE MISS: Initiating full scan.");
             const injectionResults = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
@@ -136,54 +163,154 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const scrapedData = injectionResults[0].result;
-
             if (!scrapedData || !scrapedData.text) {
                 setUIState('warning', 'Error', 'Could not read text from this page.');
                 return;
             }
 
-            const googleScriptUrl = "https://script.google.com/macros/s/AKfycbzlPNEss098PekSn8d1G5cjTL2z-5g8YAlqye8ZB-ZErLSV7sdif-EXnsBcP3_SOpmctg/exec";
+            // 4. EXTRACT DOMAIN
+            let bareDomain = "";
+            try {
+                bareDomain = scrapedData.url.replace(/^https?:\/\//i, '').split('/')[0].replace(/^www\./i, '');
+            } catch (err) {
+                bareDomain = scrapedData.url; 
+            }
 
-            const payload = {
-                token: "TheSunIsPurpleIsIt!",
-                url: scrapedData.url,
-                text: scrapedData.text,
-                groqKey: keys.groqKey,
-                vtKey: keys.vtKey
-            };
+            let vtScoreStr = "Unknown";
+            let domainAgeStr = "Unknown";
+            let vtBadEngines = 0;
+            let ageInDays = 9999;
 
-            const response = await fetch(googleScriptUrl, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            });
+            // 5. VIRUSTOTAL API CALL
+            if (bareDomain) {
+                const vtUrl = "https://www.virustotal.com/api/v3/domains/" + bareDomain;
+                try {
+                    const vtResponse = await fetch(vtUrl, {
+                        method: "GET",
+                        headers: { "x-apikey": keys.vtKey }
+                    });
 
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    if (vtResponse.status === 200) {
+                        const vtJson = await vtResponse.json();
+                        const attrs = vtJson.data.attributes;
 
-            const data = await response.json();
-            console.log("GAS Backend Replied:", data);
+                        if (attrs.last_analysis_stats) {
+                            const stats = attrs.last_analysis_stats;
+                            vtBadEngines = stats.malicious + stats.suspicious;
+                            const total = stats.harmless + stats.malicious + stats.suspicious + stats.undetected + stats.timeout;
+                            vtScoreStr = `${vtBadEngines} / ${total} engines`;
+                        }
 
-            data.ssl_secure = (isSecure || isLocalHost);
-            if (!isSecure && !isLocalHost) {
-                if (data.risk_level === "safe") {
-                    data.risk_level = "warning";
-                    data.title = "Unencrypted Connection";
-                    data.reason = sslWarningMsg + data.reason;
-                } else if (!data.reason.includes(sslWarningMsg)) {
-                    data.reason = sslWarningMsg + data.reason;
+                        if (attrs.creation_date) {
+                            const ageInMs = Date.now() - (attrs.creation_date * 1000);
+                            ageInDays = Math.floor(ageInMs / (1000 * 60 * 60 * 24));
+                            if (ageInDays < 30) domainAgeStr = ageInDays + " days";
+                            else if (ageInDays < 365) domainAgeStr = Math.floor(ageInDays / 30) + " months";
+                            else domainAgeStr = Math.floor(ageInDays / 365) + " years";
+                        }
+                    } else if (vtResponse.status === 404) {
+                        vtScoreStr = "Unscanned (Ghost)";
+                        domainAgeStr = "Unknown to VT";
+                        ageInDays = 0; 
+                    } else if (vtResponse.status === 401) {
+                        vtScoreStr = "VT Key Invalid";
+                    }
+                } catch (e) {
+                    console.error("VT Fetch Failed", e);
                 }
             }
 
-            updateUIWithScanData(data);
+            // Final Output Object
+            let finalData = {
+                success: true,
+                risk_level: "safe",
+                title: "Safe",
+                reason: "Analysis successful.",
+                summary: "No summary.",
+                vt_score: vtScoreStr,
+                domain_age: domainAgeStr,
+                ssl_secure: (isSecure || isLocalHost)
+            };
 
-            if (data.success) {
-                const newCacheEntry = {};
-                newCacheEntry[cacheKey] = {
-                    timestamp: Date.now(),
-                    result: data
+            // 6. THE FAIL-FAST VETO
+            if (vtBadEngines > 0) {
+                finalData.risk_level = "dangerous";
+                finalData.title = "Blacklisted by VirusTotal";
+                finalData.reason = `DANGER: ${vtBadEngines} security vendors flagged this domain as malicious. Leave immediately.`;
+                finalData.summary = "AI scanning was skipped because the domain is already a known threat.";
+            } 
+            // 7. GROQ AI API CALL (Only if VT passes)
+            else if (scrapedData.text.length > 50) {
+                const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
+                const payload = {
+                    model: "llama-3.3-70b-versatile",
+                    response_format: { type: "json_object" },
+                    messages: [
+                        { 
+                            role: "system", 
+                            content: `You are a cybersecurity web analyst. Analyze the provided webpage text to detect phishing, scams, or social engineering. DO NOT flag technical documentation, code repositories, or API dashboards as dangerous. Output ONLY a valid JSON object with exactly these 4 keys:
+                            1. "risk_level": must be exactly "safe", "warning", or "dangerous".
+                            2. "title": a short classification.
+                            3. "reason": a 1-sentence explanation of your risk assessment.
+                            4. "summary": 1 short bullet point summarizing the actual content.`
+                        },
+                        { role: "user", content: scrapedData.text }
+                    ],
+                    temperature: 0.1
                 };
-                await chrome.storage.local.set(newCacheEntry);
+
+                try {
+                    const groqResponse = await fetch(groqUrl, {
+                        method: "POST",
+                        headers: { "Authorization": "Bearer " + keys.groqKey, "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (groqResponse.ok) {
+                        const jsonResponse = await groqResponse.json();
+                        let rawContent = jsonResponse.choices[0].message.content.replace(/```json/g, "").replace(/```/g, "").trim();
+                        const parsedAnalysis = JSON.parse(rawContent);
+
+                        finalData.risk_level = parsedAnalysis.risk_level || "unknown";
+                        finalData.title = parsedAnalysis.title || "AI Analysis";
+                        finalData.reason = parsedAnalysis.reason || "Checked via LLM.";
+                        finalData.summary = typeof parsedAnalysis.summary === 'object' ? JSON.stringify(parsedAnalysis.summary) : String(parsedAnalysis.summary);
+                    } else {
+                        finalData.reason = "Groq API Error: " + groqResponse.status;
+                    }
+                } catch (e) {
+                    finalData.reason = "Failed to reach Groq.";
+                    console.error("Groq Error: ", e);
+                }
             }
+
+            // 8. THE DOMAIN AGE VETO
+            if (finalData.risk_level === "safe" && ageInDays < 30) {
+                finalData.risk_level = "warning";
+                finalData.title = "Brand New Domain";
+                finalData.reason = `WARNING: This domain is only ${ageInDays} days old (or unknown). Scammers frequently use new domains. ` + finalData.reason;
+            }
+
+            // 9. THE SSL VETO
+            if (!isSecure && !isLocalHost) {
+                if (finalData.risk_level === "safe") {
+                    finalData.risk_level = "warning";
+                    finalData.title = "Unencrypted Connection";
+                }
+                if (!finalData.reason.includes(sslWarningMsg)) {
+                    finalData.reason = sslWarningMsg + finalData.reason;
+                }
+            }
+
+            // 10. UPDATE UI & CACHE
+            updateUIWithScanData(finalData);
+
+            const newCacheEntry = {};
+            newCacheEntry[cacheKey] = {
+                timestamp: Date.now(),
+                result: finalData
+            };
+            await chrome.storage.local.set(newCacheEntry);
 
         } catch (error) {
             setUIState('dangerous', 'Connection Failed', error.message);
