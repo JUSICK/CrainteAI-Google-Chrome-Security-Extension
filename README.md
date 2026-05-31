@@ -1,4 +1,4 @@
-# A vibe-coded, contextual, AI-driven Chrome extension that actually reads websites to protect you from zero-day phishing, scams, and social engineering.
+# A vibe-coded, contextual, AI-driven Chrome extension that actually reads websites to protect you from zero-day phishing, scams, and social engineering by using semantic analysis with Groq model and VirusTotal domain check.
 
 ## Advertisement Video:
 
