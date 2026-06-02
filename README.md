@@ -9,5 +9,5 @@
 <img width="1280" height="800" alt="lv_0_20260531145711" src="https://github.com/user-attachments/assets/d076065a-2d01-4569-9104-bae352da2ce2" />
 <img width="1280" height="800" alt="lv_0_20260531145908" src="https://github.com/user-attachments/assets/ba957f0a-a01a-4ebb-ab62-c99e489701dd" />
 
-
+https://chromewebstore.google.com/detail/crainteai/kpfeniianoiiggdoniplhnejljhkacpi?hl=en-US&utm_source=ext_sidebar
 
