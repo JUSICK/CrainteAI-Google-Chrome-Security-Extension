@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (applyWhitelistStateIfWhitelisted()) return;
 
         // 1. Grab keys from local storage
-        const keys = await chrome.storage.local.get(['groqKey', 'vtKey']);
+        const keys = await chrome.storage.local.get(['groqKey', 'vtKey', 'model']);
 
         if (!keys.groqKey || !keys.vtKey) {
             setUIState('warning', 'Missing API Keys', 'Please click the ⚙️ gear icon in the top right to save your Groq and VirusTotal API keys.');
@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (scrapedData.text.length > 50) {
                 const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
                 const payload = {
-                    model: "llama-3.3-70b-versatile",
+                    model: keys.model || "qwen/qwen3.8-27b",
                     response_format: { type: "json_object" },
                     messages: [
                         { 
